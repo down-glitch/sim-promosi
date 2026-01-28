@@ -1,0 +1,199 @@
+:root {
+    --sidebar-width: 260px;
+    --sidebar-bg: #155724; /* Menggunakan basis hijau sesuai brand Anda, tapi lebih gelap agar elegan */
+    --sidebar-dark-bg: #0e3d18; /* Warna untuk header/active state */
+    --text-color: #e2e6ea;
+    --text-hover: #ffffff;
+    --active-item-bg: rgba(255, 255, 255, 0.15);
+    --dropdown-bg: #0c3315; /* Latar belakang submenu lebih gelap */
+}
+
+/* Container Sidebar */
+.sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    color: var(--text-color);
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    font-family: 'Segoe UI', sans-serif;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+/* Header Section */
+.sidebar-header {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background-color: var(--sidebar-dark-bg);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar-brand {
+    font-size: 1.2rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    text-decoration: none;
+}
+
+/* User Profile Section */
+.sidebar-user {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    background-color: rgba(0,0,0,0.05);
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.user-info .name {
+    display: block;
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.95rem;
+}
+
+.user-info .role {
+    display: block;
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+/* Navigation List */
+.sidebar-nav {
+    flex: 1;
+    overflow-y: auto; /* Scroll jika menu panjang */
+    padding: 15px 0;
+}
+
+.sidebar-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.nav-item {
+    position: relative;
+    width: 100%;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Agar panah ada di kanan */
+    padding: 12px 20px;
+    color: var(--text-color);
+    text-decoration: none;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.nav-link-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-link:hover, .nav-link.active {
+    background-color: var(--active-item-bg);
+    color: #fff;
+    border-left: 4px solid #fff; /* Aksen putih di kiri saat aktif */
+}
+
+/* FIX UTAMA: DROPDOWN MENU */
+.dropdown-menu {
+    display: none; /* Default sembunyi */
+    background-color: var(--dropdown-bg);
+    list-style: none;
+    padding: 5px 0;
+    /* PENTING: position static agar mendorong konten di bawahnya */
+    position: static; 
+    width: 100%;
+    box-shadow: inset 0 3px 6px rgba(0,0,0,0.1);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px 10px 55px; /* Indentasi submenu lebih dalam */
+    color: rgba(255,255,255,0.7);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+
+.dropdown-item:hover {
+    color: #fff;
+    background-color: rgba(255,255,255,0.05);
+}
+
+/* Icon Rotation Logic */
+.dropdown-icon {
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+}
+
+/* Class 'open' ditambahkan via JS ke <li> */
+.nav-item.open .dropdown-menu {
+    display: block; /* Tampilkan menu */
+    animation: slideDown 0.3s ease;
+}
+
+.nav-item.open .dropdown-icon {
+    transform: rotate(90deg); /* Putar panah ke bawah */
+}
+
+/* Logout Footer */
+.sidebar-footer {
+    padding: 15px;
+    background-color: var(--sidebar-dark-bg);
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.logout-btn {
+    width: 100%;
+    background: rgba(255, 60, 60, 0.2);
+    color: #ffcccc;
+    border: 1px solid rgba(255, 60, 60, 0.3);
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.logout-btn:hover {
+    background: #d9534f;
+    color: white;
+}
+
+/* Animation */
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
