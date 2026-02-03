@@ -42,9 +42,24 @@ Route::middleware('auth')->group(function () {
         return view('letters.index');
     })->name('letters.index');
 
-    Route::get('/activities/roadshow', function() {
-        return view('activities.roadshow');
-    })->name('activities.roadshow');
+    Route::get('/activities/roadshow', [App\Http\Controllers\RoadshowController::class, 'index'])->name('activities.roadshow');
+    Route::get('/activities/roadshow/create', [App\Http\Controllers\RoadshowController::class, 'create'])->name('activities.roadshow.create');
+    Route::post('/activities/roadshow', [App\Http\Controllers\RoadshowController::class, 'store'])->name('activities.roadshow.store');
+    Route::get('/activities/roadshow/detail/{provinsi}/{kabupaten}', [App\Http\Controllers\RoadshowController::class, 'detail'])->name('activities.roadshow.detail');
+    Route::get('/activities/roadshow/{id}/edit', [App\Http\Controllers\RoadshowController::class, 'edit'])->name('activities.roadshow.edit');
+    Route::put('/activities/roadshow/{id}', [App\Http\Controllers\RoadshowController::class, 'update'])->name('activities.roadshow.update');
+    Route::delete('/activities/roadshow/{id}', [App\Http\Controllers\RoadshowController::class, 'destroy'])->name('activities.roadshow.destroy');
+    Route::get('/activities/roadshow/debug/{provinsi}/{kabupaten}', [App\Http\Controllers\RoadshowController::class, 'debug'])->name('activities.roadshow.debug');
+    Route::get('/activities/roadshow/debug-jakarta', [App\Http\Controllers\RoadshowController::class, 'debugJakarta']);
+    Route::get('/activities/roadshow/check-data', [App\Http\Controllers\RoadshowController::class, 'checkData'])->name('activities.roadshow.checkData');
+    Route::get('/activities/roadshow/debug-data/{input_data_id}', [App\Http\Controllers\RoadshowController::class, 'checkDataDebug']);
+    
+    // API Routes
+    Route::get('/api/autocomplete-provinsi', [App\Http\Controllers\RoadshowController::class, 'autocompleteProvincia']);
+    Route::get('/api/get-kabupaten/{provinsi}', [App\Http\Controllers\RoadshowController::class, 'getKabupaten']);
+    Route::get('/api/get-sekolah/{provinsi}/{kabupaten}', [App\Http\Controllers\RoadshowController::class, 'getSekolah']);
+    Route::get('/api/get-school-history/{school_id}', [App\Http\Controllers\RoadshowController::class, 'getSchoolHistory']);
+    Route::get('/api/get-departments', [App\Http\Controllers\RoadshowController::class, 'getDepartments']);
 
     Route::get('/activities/expo', function() {
         return view('activities.expo');
