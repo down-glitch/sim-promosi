@@ -182,7 +182,7 @@
                                        value="{{ old('jenis_kegiatan') }}" required>
                             </div>
                         </div>
-
+                        
                         <!-- Program Studi -->
                         <div class="row">
                             <div class="col-md-12 mb-3">

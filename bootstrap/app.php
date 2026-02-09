@@ -6,12 +6,18 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\RedirectIfAuthenticated;
 
+use App\Console\Commands\MigrateManualEntries;
+use App\Providers\ApiServiceServiceProvider;
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        MigrateManualEntries::class,
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         // Register custom middleware aliases
         $middleware->alias([
@@ -19,6 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'guest' => RedirectIfAuthenticated::class,
         ]);
     })
+    ->withProviders([
+        ApiServiceServiceProvider::class,
+    ])
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();

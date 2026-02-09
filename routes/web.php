@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 
+// Route untuk testing API - tanpa middleware auth
+Route::get('/test-api-sekolah', [App\Http\Controllers\TestApiController::class, 'testApi'])->name('test.api.sekolah');
+
 // Redirect home ke login
 Route::get('/', function () {
     return redirect('/login');
@@ -49,6 +52,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/activities/roadshow/{id}/edit', [App\Http\Controllers\RoadshowController::class, 'edit'])->name('activities.roadshow.edit');
     Route::put('/activities/roadshow/{id}', [App\Http\Controllers\RoadshowController::class, 'update'])->name('activities.roadshow.update');
     Route::delete('/activities/roadshow/{id}', [App\Http\Controllers\RoadshowController::class, 'destroy'])->name('activities.roadshow.destroy');
+    Route::get('/activities/roadshow/export/excel/{provinsi}/{kabupaten}', [App\Http\Controllers\RoadshowController::class, 'exportExcel'])->name('activities.roadshow.export.excel');
+    Route::get('/activities/roadshow/export/pdf/{provinsi}/{kabupaten}', [App\Http\Controllers\RoadshowController::class, 'exportPdf'])->name('activities.roadshow.export.pdf');
     Route::get('/activities/roadshow/debug/{provinsi}/{kabupaten}', [App\Http\Controllers\RoadshowController::class, 'debug'])->name('activities.roadshow.debug');
     Route::get('/activities/roadshow/debug-jakarta', [App\Http\Controllers\RoadshowController::class, 'debugJakarta']);
     Route::get('/activities/roadshow/check-data', [App\Http\Controllers\RoadshowController::class, 'checkData'])->name('activities.roadshow.checkData');
@@ -81,11 +86,32 @@ Route::middleware('auth')->group(function () {
         return view('activities.other');
     })->name('activities.other');
 
+    Route::get('/analytics/dashboard', [App\Http\Controllers\AnalyticsController::class, 'dashboard'])->name('analytics.dashboard');
+    Route::get('/analytics/report', [App\Http\Controllers\AnalyticsController::class, 'report'])->name('analytics.report');
+    Route::get('/analytics/export-report', [App\Http\Controllers\AnalyticsController::class, 'exportReport'])->name('analytics.export-report');
+
+    Route::get('/import/form', [App\Http\Controllers\ImportController::class, 'showImportForm'])->name('import.form');
+    Route::post('/import/process', [App\Http\Controllers\ImportController::class, 'import'])->name('import.process');
+
+    // Routes untuk verifikasi dan autocomplete sekolah - tanpa middleware auth
+    Route::prefix('api/sekolah')->withoutMiddleware(['auth'])->group(function () {
+        Route::get('/autocomplete', [App\Http\Controllers\SchoolVerificationController::class, 'autocompleteSekolah'])->name('api.sekolah.autocomplete');
+        Route::post('/verify', [App\Http\Controllers\SchoolVerificationController::class, 'verifySekolah'])->name('api.sekolah.verify');
+        Route::get('/provinsi', [App\Http\Controllers\SchoolVerificationController::class, 'getProvinsi'])->name('api.sekolah.provinsi');
+        Route::get('/kabupaten/{provinsi}', [App\Http\Controllers\SchoolVerificationController::class, 'getKabupatenByProvince'])->name('api.sekolah.kabupaten');
+        Route::get('/search', [App\Http\Controllers\SchoolVerificationController::class, 'searchSekolah'])->name('api.sekolah.search');
+    });
+
+    // Route untuk testing API - tanpa middleware auth
+    Route::get('/test-api-sekolah', [App\Http\Controllers\TestApiController::class, 'testApi'])->name('test.api.sekolah');
+
     Route::get('/reports', function() {
         return view('reports.index');
     })->name('reports.index');
 
-    Route::get('/settings', function() {
-        return view('settings.index');
-    })->name('settings.index');
+    Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
+    Route::patch('/settings/profile', [App\Http\Controllers\SettingsController::class, 'updateProfile'])->name('settings.profile.update');
+    Route::patch('/settings/security', [App\Http\Controllers\SettingsController::class, 'updateSecurity'])->name('settings.security.update');
+    Route::patch('/settings/notification', [App\Http\Controllers\SettingsController::class, 'updateNotification'])->name('settings.notification.update');
+    Route::patch('/settings/system', [App\Http\Controllers\SettingsController::class, 'updateSystem'])->name('settings.system.update');
 });

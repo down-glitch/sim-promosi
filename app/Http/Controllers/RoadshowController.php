@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use App\Models\MstrSchools;
 use App\Models\TransInputData;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class RoadshowController extends Controller
 {
@@ -13,54 +16,39 @@ class RoadshowController extends Controller
     {
         // Ambil data roadshow dari dua sumber:
         // 1. Dari mstr_schools yang terlink di trans_input_data
-        // 2. Dari JSON di Note field untuk manual entries
-        
+        // 2. Dari tabel manual_entries untuk manual entries
+
         // Query 1: Data dari mstr_schools (linked entries)
         $linkedData = DB::table('mstr_schools as ms')
             ->join('trans_input_data_schools_id as tdsi', 'ms.INSTITUTION_CODE', '=', 'tdsi.School_Id')
             ->join('trans_input_data as td', 'tdsi.Input_Data_Id', '=', 'td.Input_Data_Id')
+            ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
             ->where('td.Input_Data_Type', 1)
-            ->select('ms.PROVINCE', 'ms.CITY')
-            ->distinct()
+            ->select('ms.PROVINCE', 'ms.CITY', 'td.Event_Start_Date', 'td.Event_End_Date', 'tdp.Name as penanggungjawab')
             ->get()
             ->toArray();
 
-        // Query 2: Data dari Note field (manual entries)
-        $manualData = DB::table('trans_input_data as td')
-            ->leftJoin('trans_input_data_schools_id as tdsi', 'td.Input_Data_Id', '=', 'tdsi.Input_Data_Id')
+        // Query 2: Data dari tabel manual_entries (baru)
+        $manualData = DB::table('manual_entries as me')
+            ->join('trans_input_data as td', 'me.input_data_id', '=', 'td.Input_Data_Id')
+            ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
             ->where('td.Input_Data_Type', 1)
-            ->whereNull('tdsi.Input_Data_Id') // Hanya yang tidak terlink ke sekolah
-            ->whereNotNull('td.Note')
-            ->get();
-
-        // Process manual data dan extract province/city dari Note JSON
-        $manualProcessed = [];
-        foreach ($manualData as $data) {
-            try {
-                $note = json_decode($data->Note, true);
-                if (is_array($note) && isset($note['provinsi']) && isset($note['kabupaten'])) {
-                    $manualProcessed[] = (object)[
-                        'PROVINCE' => $note['provinsi'],
-                        'CITY' => $note['kabupaten']
-                    ];
-                }
-            } catch (\Exception $e) {
-                // Skip invalid JSON
-            }
-        }
+            ->select('me.province as PROVINCE', 'me.city as CITY', 'td.Event_Start_Date', 'td.Event_End_Date', 'tdp.Name as penanggungjawab')
+            ->get()
+            ->toArray();
 
         // Gabung kedua data
-        $allData = array_merge($linkedData, $manualProcessed);
+        $allData = array_merge($linkedData, $manualData);
 
         // Group berdasarkan province dan city
         $grouped = collect($allData)->groupBy(function($item) {
             return $item->PROVINCE . '|' . $item->CITY;
         });
 
-        // Hitung kegiatan per group
+        // Hitung kegiatan per group dan tambahkan informasi tambahan
         $roadshows = $grouped->map(function($items, $key) {
             [$province, $city] = explode('|', $key);
-            
+
             // Hitung kegiatan dari linked schools
             $linkedCount = DB::table('mstr_schools as ms')
                 ->join('trans_input_data_schools_id as tdsi', 'ms.INSTITUTION_CODE', '=', 'tdsi.School_Id')
@@ -72,32 +60,102 @@ class RoadshowController extends Controller
                 ->count('DISTINCT tdsi.Input_Data_Id');
 
             // Hitung kegiatan dari manual entries
-            $manualCount = DB::table('trans_input_data as td')
-                ->leftJoin('trans_input_data_schools_id as tdsi', 'td.Input_Data_Id', '=', 'tdsi.Input_Data_Id')
+            $manualCount = DB::table('manual_entries as me')
+                ->join('trans_input_data as td', 'me.input_data_id', '=', 'td.Input_Data_Id')
                 ->where('td.Input_Data_Type', 1)
-                ->whereNull('tdsi.Input_Data_Id')
-                ->whereNotNull('td.Note')
-                ->whereRaw("JSON_VALID(td.Note) = 1")
-                ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(td.Note, '$.provinsi'))"), $province)
-                ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(td.Note, '$.kabupaten'))"), $city)
+                ->where('me.province', $province)
+                ->where('me.city', $city)
                 ->count();
 
             $totalKegiatan = $linkedCount + $manualCount;
+
+            // Ambil informasi tambahan untuk ditampilkan
+            $recentActivity = DB::table('mstr_schools as ms')
+                ->join('trans_input_data_schools_id as tdsi', 'ms.INSTITUTION_CODE', '=', 'tdsi.School_Id')
+                ->join('trans_input_data as td', 'tdsi.Input_Data_Id', '=', 'td.Input_Data_Id')
+                ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
+                ->where('ms.PROVINCE', $province)
+                ->where('ms.CITY', $city)
+                ->where('td.Input_Data_Type', 1)
+                ->select('td.Event_Start_Date', 'td.Event_End_Date', 'tdp.Name as penanggungjawab', 'td.Promotion_Name')
+                ->orderBy('td.Event_Start_Date', 'desc')
+                ->first();
+
+            if (!$recentActivity) {
+                // Jika tidak ada dari linked schools, cek manual entries
+                $recentActivity = DB::table('manual_entries as me')
+                    ->join('trans_input_data as td', 'me.input_data_id', '=', 'td.Input_Data_Id')
+                    ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
+                    ->where('me.province', $province)
+                    ->where('me.city', $city)
+                    ->where('td.Input_Data_Type', 1)
+                    ->select('td.Event_Start_Date', 'td.Event_End_Date', 'tdp.Name as penanggungjawab', 'td.Promotion_Name')
+                    ->orderBy('td.Event_Start_Date', 'desc')
+                    ->first();
+            }
 
             return [
                 'id' => md5($province . $city),
                 'provinsi' => $province,
                 'kabupaten' => $city,
-                'jumlah_kegiatan' => $totalKegiatan
+                'jumlah_kegiatan' => $totalKegiatan,
+                'nama_kegiatan_terakhir' => $recentActivity ? $recentActivity->Promotion_Name : '-',
+                'tanggal_terakhir' => $recentActivity ? \Carbon\Carbon::parse($recentActivity->Event_Start_Date)->format('d M Y') : '-',
+                'penanggung_jawab' => $recentActivity ? $recentActivity->penanggungjawab : '-',
             ];
         })->values()->toArray();
+
+        // Urutkan berdasarkan jumlah kegiatan terbanyak
+        usort($roadshows, function($a, $b) {
+            return $b['jumlah_kegiatan'] <=> $a['jumlah_kegiatan'];
+        });
 
         // Filter berdasarkan pencarian jika ada
         if ($request->has('search') && $request->search) {
             $search = strtolower($request->search);
             $roadshows = array_filter($roadshows, function($item) use ($search) {
-                return stripos($item['provinsi'], $search) !== false || 
+                return stripos($item['provinsi'], $search) !== false ||
                        stripos($item['kabupaten'], $search) !== false;
+            });
+        }
+
+        // Filter berdasarkan provinsi jika ada
+        if ($request->has('provinsi') && $request->provinsi) {
+            $provinsi = $request->provinsi;
+            $roadshows = array_filter($roadshows, function($item) use ($provinsi) {
+                return $item['provinsi'] == $provinsi;
+            });
+        }
+
+        // Sorting berdasarkan parameter
+        if ($request->has('sort') && $request->sort) {
+            $sort = $request->sort;
+            switch ($sort) {
+                case 'jumlah_kegiatan_desc':
+                    usort($roadshows, function($a, $b) {
+                        return $b['jumlah_kegiatan'] <=> $a['jumlah_kegiatan'];
+                    });
+                    break;
+                case 'jumlah_kegiatan_asc':
+                    usort($roadshows, function($a, $b) {
+                        return $a['jumlah_kegiatan'] <=> $b['jumlah_kegiatan'];
+                    });
+                    break;
+                case 'provinsi':
+                    usort($roadshows, function($a, $b) {
+                        return strcmp($a['provinsi'], $b['provinsi']);
+                    });
+                    break;
+                case 'kabupaten':
+                    usort($roadshows, function($a, $b) {
+                        return strcmp($a['kabupaten'], $b['kabupaten']);
+                    });
+                    break;
+            }
+        } else {
+            // Urutkan berdasarkan jumlah kegiatan terbanyak jika tidak ada sorting
+            usort($roadshows, function($a, $b) {
+                return $b['jumlah_kegiatan'] <=> $a['jumlah_kegiatan'];
             });
         }
 
@@ -107,9 +165,13 @@ class RoadshowController extends Controller
 
     public function detail(Request $request, $provinsi, $kabupaten)
     {
-        // Query: Ambil SEMUA data roadshow untuk provinsi dan kabupaten ini
-        // Baik yang terlink ke sekolah di mstr_schools maupun yang belum
-        
+        // Pagination parameters
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10); // Default 10 items per page
+
+        // Query: Ambil data roadshow untuk provinsi dan kabupaten ini
+        // Baik yang terlink ke sekolah di mstr_schools maupun dari tabel manual_entries
+
         // 1. Ambil data dari sekolah yang terlink ke trans_input_data
         $linkedSchools = DB::table('mstr_schools as ms')
             ->leftJoin('trans_input_data_schools_id as tdsi', 'ms.INSTITUTION_CODE', '=', 'tdsi.School_Id')
@@ -129,34 +191,24 @@ class RoadshowController extends Controller
             ->orderBy('ms.NAME')
             ->get();
 
-        // 2. Ambil data manual entries dari Note field
-        $manualSchools = DB::table('trans_input_data as td')
-            ->leftJoin('trans_input_data_schools_id as tdsi', 'td.Input_Data_Id', '=', 'tdsi.Input_Data_Id')
+        // 2. Ambil data dari tabel manual_entries
+        $manualEntries = DB::table('manual_entries as me')
+            ->join('trans_input_data as td', 'me.input_data_id', '=', 'td.Input_Data_Id')
             ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
             ->where('td.Input_Data_Type', 1)
-            ->whereNull('tdsi.Input_Data_Id') // Tidak terlink ke sekolah
-            ->whereNotNull('td.Note')
+            ->where('me.province', $provinsi)
+            ->where('me.city', $kabupaten)
+            ->select(
+                'me.school_name as nama_sekolah',
+                'td.Input_Data_Id',
+                'td.Event_Start_Date',
+                'td.Promotion_Name',
+                'tdp.Name as penanggungjawab'
+            )
             ->get();
 
-        $manualProcessed = collect();
-        foreach ($manualSchools as $item) {
-            try {
-                $note = json_decode($item->Note, true);
-                if (is_array($note) && 
-                    isset($note['provinsi']) && $note['provinsi'] === $provinsi &&
-                    isset($note['kabupaten']) && $note['kabupaten'] === $kabupaten) {
-                    
-                    $item->INSTITUTION_CODE = $note['sekolah'] ?? 'N/A';
-                    $item->nama_sekolah = $note['sekolah'] ?? 'N/A';
-                    $manualProcessed->push($item);
-                }
-            } catch (\Exception $e) {
-                // Skip invalid JSON
-            }
-        }
-
         // Gabung kedua data
-        $schools = $linkedSchools->merge($manualProcessed);
+        $schools = $linkedSchools->merge($manualEntries);
 
         // Filter berdasarkan pencarian
         if ($request->has('search') && $request->search) {
@@ -167,8 +219,13 @@ class RoadshowController extends Controller
             });
         }
 
+        // Calculate pagination
+        $total = $schools->count();
+        $offset = ($page - 1) * $perPage;
+        $schoolsPaginated = $schools->skip($offset)->take($perPage);
+
         // Map hasil untuk format yang diinginkan
-        $schoolsFormatted = $schools->map(function ($item, $key) {
+        $schoolsFormatted = $schoolsPaginated->map(function ($item, $key) use ($offset) {
             // Ambil data Prodi dari trans_input_data_department (maksimal 3)
             $prodi = '-';
             $prodi_list = [];
@@ -203,7 +260,7 @@ class RoadshowController extends Controller
             }
 
             return [
-                'id' => $key + 1,
+                'id' => $offset + $key + 1, // Adjust ID based on pagination offset
                 'input_data_id' => $item->Input_Data_Id, // Tambahkan ID kegiatan untuk edit/hapus
                 'tanggal' => $item->Event_Start_Date ? \Carbon\Carbon::parse($item->Event_Start_Date)->format('d F Y') : '-',
                 'nama_sekolah' => $item->nama_sekolah,
@@ -217,7 +274,15 @@ class RoadshowController extends Controller
         return response()->json([
             'provinsi' => $provinsi,
             'kabupaten' => $kabupaten,
-            'schools' => $schoolsFormatted
+            'schools' => $schoolsFormatted,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => ceil($total / $perPage),
+                'from' => $offset + 1,
+                'to' => min($offset + $perPage, $total)
+            ]
         ]);
     }
 
@@ -682,5 +747,241 @@ class RoadshowController extends Controller
             ->toArray();
 
         return response()->json($departments);
+    }
+
+    // Export detail roadshow to Excel
+    public function exportExcel($provinsi, $kabupaten)
+    {
+        // Query: Ambil SEMUA data roadshow untuk provinsi dan kabupaten ini
+        // Baik yang terlink ke sekolah di mstr_schools maupun dari tabel manual_entries
+
+        // 1. Ambil data dari sekolah yang terlink ke trans_input_data
+        $linkedSchools = DB::table('mstr_schools as ms')
+            ->leftJoin('trans_input_data_schools_id as tdsi', 'ms.INSTITUTION_CODE', '=', 'tdsi.School_Id')
+            ->leftJoin('trans_input_data as td', 'tdsi.Input_Data_Id', '=', 'td.Input_Data_Id')
+            ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
+            ->where('ms.PROVINCE', $provinsi)
+            ->where('ms.CITY', $kabupaten)
+            ->where('td.Input_Data_Type', 1)
+            ->select(
+                'ms.INSTITUTION_CODE',
+                'ms.NAME as nama_sekolah',
+                'td.Input_Data_Id',
+                'td.Event_Start_Date',
+                'td.Promotion_Name',
+                'tdp.Name as penanggungjawab'
+            )
+            ->orderBy('ms.NAME')
+            ->get();
+
+        // 2. Ambil data dari tabel manual_entries
+        $manualEntries = DB::table('manual_entries as me')
+            ->join('trans_input_data as td', 'me.input_data_id', '=', 'td.Input_Data_Id')
+            ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
+            ->where('td.Input_Data_Type', 1)
+            ->where('me.province', $provinsi)
+            ->where('me.city', $kabupaten)
+            ->select(
+                'me.school_name as nama_sekolah',
+                'td.Input_Data_Id',
+                'td.Event_Start_Date',
+                'td.Promotion_Name',
+                'tdp.Name as penanggungjawab'
+            )
+            ->get();
+
+        // Gabung kedua data
+        $schools = $linkedSchools->merge($manualEntries);
+
+        // Map hasil untuk format yang diinginkan
+        $schoolsFormatted = $schools->map(function ($item) {
+            // Ambil data Prodi dari trans_input_data_department (maksimal 3)
+            $prodi = '-';
+            if ($item->Input_Data_Id) {
+                $prodis = DB::table('trans_input_data_department as tidd')
+                    ->leftJoin('mstr_department as md', 'tidd.Department_Id', '=', 'md.DEPARTMENT_ID')
+                    ->where('tidd.Input_Data_Id', $item->Input_Data_Id)
+                    ->pluck('md.DEPARTMENT_NAME')
+                    ->filter()
+                    ->unique()
+                    ->take(3)
+                    ->toArray();
+
+                if (!empty($prodis)) {
+                    $prodi = implode(', ', $prodis);
+                }
+            }
+
+            // Ambil alumni dari trans_input_data_sponsorship
+            $alumni = '-';
+            if ($item->Input_Data_Id) {
+                $alumniData = DB::table('trans_input_data_sponsorship')
+                    ->where('Input_Data_Id', $item->Input_Data_Id)
+                    ->first();
+
+                if ($alumniData && !empty($alumniData->Sponsorship_Name)) {
+                    if (is_numeric($alumniData->Sponsorship_Name)) {
+                        $alumni = (int)$alumniData->Sponsorship_Name;
+                    }
+                }
+            }
+
+            return [
+                'tanggal' => $item->Event_Start_Date ? \Carbon\Carbon::parse($item->Event_Start_Date)->format('d F Y') : '-',
+                'nama_sekolah' => $item->nama_sekolah,
+                'penanggungjawab' => $item->penanggungjawab ?? '-',
+                'prodi' => $prodi,
+                'alumni' => $alumni
+            ];
+        })->toArray();
+
+        // Create Excel file using PhpSpreadsheet
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Set title
+        $sheet->setTitle('Detail Roadshow ' . $kabupaten);
+
+        // Header
+        $sheet->setCellValue('A1', 'Tanggal');
+        $sheet->setCellValue('B1', 'Nama Sekolah');
+        $sheet->setCellValue('C1', 'Penanggung Jawab');
+        $sheet->setCellValue('D1', 'Program Studi');
+        $sheet->setCellValue('E1', 'Jumlah Alumni');
+
+        // Styling header
+        $headerRange = 'A1:E1';
+        $sheet->getStyle($headerRange)->getFont()->setBold(true);
+        $sheet->getStyle($headerRange)->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('FFDDDDDD');
+
+        // Fill data
+        $row = 2;
+        foreach ($schoolsFormatted as $item) {
+            $sheet->setCellValue('A' . $row, $item['tanggal']);
+            $sheet->setCellValue('B' . $row, $item['nama_sekolah']);
+            $sheet->setCellValue('C' . $row, $item['penanggungjawab']);
+            $sheet->setCellValue('D' . $row, $item['prodi']);
+            $sheet->setCellValue('E' . $row, $item['alumni']);
+            $row++;
+        }
+
+        // Auto size columns
+        for ($col = 'A'; $col !== 'F'; $col++) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        // Create writer and save to temporary file
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $fileName = 'detail_roadshow_' . $kabupaten . '_' . date('Y-m-d_H-i-s') . '.xlsx';
+        $filePath = storage_path('app/temp/' . $fileName);
+
+        // Create directory if not exists
+        if (!is_dir(dirname($filePath))) {
+            mkdir(dirname($filePath), 0755, true);
+        }
+
+        $writer->save($filePath);
+
+        // Return download response
+        return response()->download($filePath)->deleteFileAfterSend(true);
+    }
+
+    // Export detail roadshow to PDF
+    public function exportPdf($provinsi, $kabupaten)
+    {
+        // Query: Ambil SEMUA data roadshow untuk provinsi dan kabupaten ini
+        // Baik yang terlink ke sekolah di mstr_schools maupun dari tabel manual_entries
+
+        // 1. Ambil data dari sekolah yang terlink ke trans_input_data
+        $linkedSchools = DB::table('mstr_schools as ms')
+            ->leftJoin('trans_input_data_schools_id as tdsi', 'ms.INSTITUTION_CODE', '=', 'tdsi.School_Id')
+            ->leftJoin('trans_input_data as td', 'tdsi.Input_Data_Id', '=', 'td.Input_Data_Id')
+            ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
+            ->where('ms.PROVINCE', $provinsi)
+            ->where('ms.CITY', $kabupaten)
+            ->where('td.Input_Data_Type', 1)
+            ->select(
+                'ms.INSTITUTION_CODE',
+                'ms.NAME as nama_sekolah',
+                'td.Input_Data_Id',
+                'td.Event_Start_Date',
+                'td.Promotion_Name',
+                'tdp.Name as penanggungjawab'
+            )
+            ->orderBy('ms.NAME')
+            ->get();
+
+        // 2. Ambil data dari tabel manual_entries
+        $manualEntries = DB::table('manual_entries as me')
+            ->join('trans_input_data as td', 'me.input_data_id', '=', 'td.Input_Data_Id')
+            ->leftJoin('trans_input_data_person as tdp', 'td.Input_Data_Id', '=', 'tdp.Input_Data_Id')
+            ->where('td.Input_Data_Type', 1)
+            ->where('me.province', $provinsi)
+            ->where('me.city', $kabupaten)
+            ->select(
+                'me.school_name as nama_sekolah',
+                'td.Input_Data_Id',
+                'td.Event_Start_Date',
+                'td.Promotion_Name',
+                'tdp.Name as penanggungjawab'
+            )
+            ->get();
+
+        // Gabung kedua data
+        $schools = $linkedSchools->merge($manualEntries);
+
+        // Map hasil untuk format yang diinginkan
+        $schoolsFormatted = $schools->map(function ($item) {
+            // Ambil data Prodi dari trans_input_data_department (maksimal 3)
+            $prodi = '-';
+            if ($item->Input_Data_Id) {
+                $prodis = DB::table('trans_input_data_department as tidd')
+                    ->leftJoin('mstr_department as md', 'tidd.Department_Id', '=', 'md.DEPARTMENT_ID')
+                    ->where('tidd.Input_Data_Id', $item->Input_Data_Id)
+                    ->pluck('md.DEPARTMENT_NAME')
+                    ->filter()
+                    ->unique()
+                    ->take(3)
+                    ->toArray();
+
+                if (!empty($prodis)) {
+                    $prodi = implode(', ', $prodis);
+                }
+            }
+
+            // Ambil alumni dari trans_input_data_sponsorship
+            $alumni = '-';
+            if ($item->Input_Data_Id) {
+                $alumniData = DB::table('trans_input_data_sponsorship')
+                    ->where('Input_Data_Id', $item->Input_Data_Id)
+                    ->first();
+
+                if ($alumniData && !empty($alumniData->Sponsorship_Name)) {
+                    if (is_numeric($alumniData->Sponsorship_Name)) {
+                        $alumni = (int)$alumniData->Sponsorship_Name;
+                    }
+                }
+            }
+
+            return [
+                'tanggal' => $item->Event_Start_Date ? \Carbon\Carbon::parse($item->Event_Start_Date)->format('d F Y') : '-',
+                'nama_sekolah' => $item->nama_sekolah,
+                'penanggungjawab' => $item->penanggungjawab ?? '-',
+                'prodi' => $prodi,
+                'alumni' => $alumni
+            ];
+        })->toArray();
+
+        // Generate PDF using DomPDF
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadView('exports.roadshow-detail-pdf', [
+            'provinsi' => $provinsi,
+            'kabupaten' => $kabupaten,
+            'data' => $schoolsFormatted
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('detail_roadshow_' . $kabupaten . '_' . date('Y-m-d_H-i-s') . '.pdf');
     }
 }

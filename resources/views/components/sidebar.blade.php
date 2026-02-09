@@ -71,11 +71,19 @@
                 </ul>
             </li>
 
-            <li class="nav-item">
-                <a href="{{ route('reports.index') }}" class="nav-link {{ request()->routeIs('reports*') ? 'active' : '' }}">
+            <li class="nav-item has-dropdown">
+                <a href="#" class="nav-link {{ request()->routeIs('reports*') || request()->routeIs('analytics*') ? 'active' : '' }} dropdown-toggle">
                     <i class="bi bi-file-earmark-bar-graph"></i>
-                    <span class="nav-text">Laporan</span>
+                    <span class="nav-text">Laporan & Analitik</span>
+                    <i class="bi bi-chevron-down dropdown-icon"></i>
                 </a>
+                <ul class="dropdown-menu">
+                    <li><a href="{{ route('analytics.dashboard') }}" class="dropdown-item {{ request()->routeIs('analytics.dashboard') ? 'active' : '' }}"><i class="bi bi-bar-chart-line"></i> <span>Dashboard Analitik</span></a></li>
+                    <li><a href="{{ route('analytics.report') }}" class="dropdown-item {{ request()->routeIs('analytics.report') ? 'active' : '' }}"><i class="bi bi-file-earmark-spreadsheet"></i> <span>Laporan Kegiatan</span></a></li>
+                    <li><a href="{{ route('import.form') }}" class="dropdown-item {{ request()->routeIs('import.form') ? 'active' : '' }}"><i class="bi bi-upload"></i> <span>Impor Data</span></a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a href="{{ route('reports.index') }}" class="dropdown-item {{ request()->routeIs('reports*') ? 'active' : '' }}"><i class="bi bi-file-earmark-bar-graph"></i> <span>Laporan Umum</span></a></li>
+                </ul>
             </li>
 
             <li class="nav-item">

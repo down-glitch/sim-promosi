@@ -1,3 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Import SPSS (Sistem Promosi Standard Styling) */
+@import './spss.css';
+
+/* Import Accessibility Enhancements */
+@import './accessibility.css';

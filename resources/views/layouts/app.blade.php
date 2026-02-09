@@ -3,6 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>@yield('title', 'SIM-PROMOSI')</title>
         <link
             href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
@@ -19,10 +20,10 @@
         @livewireStyles
         <style>
             :root {
-                --primary-color: #276a2b;
-                --secondary-color: #1f5522;
-                --accent-color: #4caf50;
-                --light-bg: #f8f9fa;
+                --primary-color: {{ session('user_primary_color', '#276a2b') }};
+                --secondary-color: {{ session('user_secondary_color', '#1f5522') }};
+                --accent-color: {{ session('user_accent_color', '#4caf50') }};
+                --light-bg: {{ session('user_background_color', '#f8f9fa') }};
                 --dark-text: #212529;
                 --light-text: #f8f9fa;
             }
@@ -445,7 +446,7 @@
                 background: linear-gradient(
                     135deg,
                     var(--primary-color) 0%,
-                    #3d8b40 100%
+                    var(--secondary-color) 100%
                 );
                 color: white;
             }
@@ -722,7 +723,19 @@
                 </nav>
 
                 <!-- Content Area -->
-                <div class="content-area">@yield('content')</div>
+                <div class="content-area">
+                    <!-- Loading Indicator -->
+                    <div id="loadingIndicator" class="position-fixed top-0 start-0 end-0" style="height: 3px; z-index: 1050; display: none;">
+                        <div class="progress" style="height: 3px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    @yield('content')
+                </div>
+
+                <!-- Toast Container -->
+                <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 10000;"></div>
 
                 <!-- Footer -->
                 <footer class="dashboard-footer">
@@ -821,6 +834,89 @@
 
                 // Prevent back button
                 window.history.forward();
+            });
+
+            // Fungsi untuk menampilkan loading indicator
+            function showLoadingIndicator() {
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                loadingIndicator.style.display = 'block';
+            }
+
+            // Fungsi untuk menyembunyikan loading indicator
+            function hideLoadingIndicator() {
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                loadingIndicator.style.display = 'none';
+            }
+
+            // Tangani permulaan dan akhir loading halaman
+            document.addEventListener('DOMContentLoaded', function() {
+                hideLoadingIndicator();
+            });
+
+            // Tangani navigasi link
+            document.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', function() {
+                    if (!this.getAttribute('target') && !this.href.startsWith('javascript:')) {
+                        showLoadingIndicator();
+                    }
+                });
+            });
+
+            // Tangani submit form
+            document.querySelectorAll('form').forEach(form => {
+                form.addEventListener('submit', function() {
+                    showLoadingIndicator();
+                });
+            });
+
+            // Tangani AJAX request jika ada
+            document.addEventListener('ajaxStart', function() {
+                showLoadingIndicator();
+            });
+
+            document.addEventListener('ajaxComplete', function() {
+                hideLoadingIndicator();
+            });
+        </script>
+
+        <!-- Apply theme colors and mode -->
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                // Apply theme mode (light/dark/auto)
+                const themeMode = '{{ session('user_theme', 'light') }}';
+
+                if (themeMode === 'dark') {
+                    // Apply dark theme
+                    document.body.classList.add('dark-theme');
+                    // You can add more dark theme specific styling here
+                } else if (themeMode === 'auto') {
+                    // Apply theme based on system preference
+                    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                        document.body.classList.add('dark-theme');
+                    } else {
+                        document.body.classList.remove('dark-theme');
+                    }
+
+                    // Listen for changes in system theme preference
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                        if (e.matches) {
+                            document.body.classList.add('dark-theme');
+                        } else {
+                            document.body.classList.remove('dark-theme');
+                        }
+                    });
+                }
+
+                // Apply custom colors
+                const primaryColor = '{{ session('user_primary_color', '#276a2b') }}';
+                const secondaryColor = '{{ session('user_secondary_color', '#1f5522') }}';
+                const accentColor = '{{ session('user_accent_color', '#4caf50') }}';
+                const backgroundColor = '{{ session('user_background_color', '#f8f9fa') }}';
+
+                document.documentElement.style.setProperty('--primary-color', primaryColor);
+                document.documentElement.style.setProperty('--secondary-color', secondaryColor);
+                document.documentElement.style.setProperty('--accent-color', accentColor);
+                document.documentElement.style.setProperty('--light-bg', backgroundColor);
             });
         </script>
         @livewireScripts

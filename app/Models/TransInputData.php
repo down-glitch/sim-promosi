@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\Auditable;
 
 class TransInputData extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable;
 
     public $timestamps = false;
 
@@ -47,5 +48,11 @@ class TransInputData extends Model
     public function inputDataDepartment()
     {
         return $this->hasMany(TransInputDataDepartment::class, 'Input_Data_Id', 'Input_Data_Id');
+    }
+
+    // Relasi ke tabel manual_entries
+    public function manualEntry()
+    {
+        return $this->hasOne(ManualEntry::class, 'input_data_id', 'Input_Data_Id');
     }
 }

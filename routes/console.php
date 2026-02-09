@@ -6,3 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('migrate:manual-entries', function () {
+    $this->call('migrate:manual-entries');
+})->purpose('Migrasi data manual entries dari JSON ke tabel manual_entries');

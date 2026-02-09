@@ -1,0 +1,45 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        // Buat tabel manual_entries tanpa foreign key dulu
+        Schema::create('manual_entries', function (Blueprint $table) {
+            $table->id();
+            $table->integer('input_data_id')->nullable(); // Harus sesuai dengan tipe kolom Input_Data_Id di trans_input_data
+            $table->string('province')->nullable(); // Provinsi
+            $table->string('city')->nullable(); // Kabupaten/Kota
+            $table->string('school_name')->nullable(); // Nama sekolah
+            $table->string('school_address')->nullable(); // Alamat sekolah
+            $table->string('contact_person')->nullable(); // Kontak person
+            $table->string('phone_number')->nullable(); // Nomor telepon
+            $table->text('notes')->nullable(); // Catatan tambahan
+            $table->timestamps(); // created_at dan updated_at
+
+            // Index untuk kolom yang sering digunakan dalam query
+            $table->index(['province', 'city']);
+            $table->index('input_data_id');
+        });
+
+        // Tambahkan foreign key setelah tabel dibuat
+        Schema::table('manual_entries', function (Blueprint $table) {
+            $table->foreign('input_data_id')->references('Input_Data_Id')->on('trans_input_data')->onDelete('cascade');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('manual_entries');
+    }
+};

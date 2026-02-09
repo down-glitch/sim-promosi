@@ -1,0 +1,43 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            // Kolom untuk informasi profil
+            $table->string('phone')->nullable();
+            $table->string('department')->nullable();
+            $table->text('bio')->nullable();
+
+            // Kolom untuk preferensi notifikasi
+            $table->boolean('email_notifications')->default(true);
+            $table->boolean('sms_notifications')->default(false);
+            $table->boolean('push_notifications')->default(true);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn([
+                'phone',
+                'department',
+                'bio',
+                'email_notifications',
+                'sms_notifications',
+                'push_notifications'
+            ]);
+        });
+    }
+};
